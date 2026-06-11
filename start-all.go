@@ -73,7 +73,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	npmCLI, err := findNPMCLI(nodeExe)
+	npmExe, err := findNPM()
 	if err != nil {
 		fatal(err)
 	}
@@ -86,6 +86,7 @@ func main() {
 	fmt.Println("root:     ", root)
 	fmt.Println("go:       ", goExe)
 	fmt.Println("node:     ", nodeExe)
+	fmt.Println("npm:      ", npmExe)
 	fmt.Println("backend:  ", fmt.Sprintf("http://127.0.0.1:%d", *backendPort))
 	fmt.Println("frontend: ", fmt.Sprintf("http://127.0.0.1:%d", *frontendPort))
 	fmt.Println()
@@ -110,8 +111,8 @@ func main() {
 		runForeground(commandSpec{
 			name: "npm-install",
 			dir:  frontendDir,
-			exe:  nodeExe,
-			args: []string{npmCLI, "install"},
+			exe:  npmExe,
+			args: []string{"install"},
 		})
 	}
 	if !fileExists(viteJS) {
@@ -207,28 +208,17 @@ func findNode() (string, error) {
 	return "", errors.New("node.exe not found in PATH; install Node.js to start the frontend")
 }
 
-func findNPMCLI(nodeExe string) (string, error) {
-	candidates := []string{}
-	nodeDir := filepath.Dir(nodeExe)
-	candidates = append(candidates,
-		filepath.Join(nodeDir, "node_modules", "npm", "bin", "npm-cli.js"),
-		filepath.Join(filepath.Dir(nodeDir), "node_modules", "npm", "bin", "npm-cli.js"),
-	)
-	if appData := os.Getenv("APPDATA"); appData != "" {
-		candidates = append(candidates, filepath.Join(appData, "npm", "node_modules", "npm", "bin", "npm-cli.js"))
+func findNPM() (string, error) {
+	candidates := []string{"npm"}
+	if runtime.GOOS == "windows" {
+		candidates = []string{"npm.cmd", "npm.exe", "npm"}
 	}
-	if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
-		candidates = append(candidates, filepath.Join(programFiles, "nodejs", "node_modules", "npm", "bin", "npm-cli.js"))
-	}
-	if programFilesX86 := os.Getenv("ProgramFiles(x86)"); programFilesX86 != "" {
-		candidates = append(candidates, filepath.Join(programFilesX86, "nodejs", "node_modules", "npm", "bin", "npm-cli.js"))
-	}
-	for _, c := range candidates {
-		if fileExists(c) {
-			return c, nil
+	for _, name := range candidates {
+		if p, err := exec.LookPath(name); err == nil {
+			return p, nil
 		}
 	}
-	return "", errors.New("npm-cli.js not found; install Node.js with npm to install frontend dependencies")
+	return "", errors.New("npm not found in PATH; install Node.js with npm to install frontend dependencies")
 }
 
 func backendEnv(root string, port int, adminKey string, prewarmTarget int) []string {
